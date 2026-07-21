@@ -47,3 +47,38 @@ func spawnDetachedLoop(_ subcommand: String) -> Int32 {
 func clearPidFile() {
     try? FileManager.default.removeItem(atPath: pidFilePath)
 }
+
+// ---------------------------------------------------------------------------
+// The overlay process has its own independent lifecycle: it's started once
+// and stays up across many working/done/attention cycles, unlike the
+// working-loop daemon above which restarts on every hook event.
+
+private var overlayPidFilePath: String {
+    NSTemporaryDirectory() + "capsig-overlay-\(NSUserName()).pid"
+}
+
+/// Starts the overlay process if it isn't already running. Safe to call
+/// repeatedly (e.g. on every UserPromptSubmit) — it's a no-op once started.
+func ensureOverlayRunning() {
+    if let content = try? String(contentsOfFile: overlayPidFilePath, encoding: .utf8),
+       let pid = Int32(content.trimmingCharacters(in: .whitespacesAndNewlines)),
+       kill(pid, 0) == 0 {
+        return
+    }
+    let task = Process()
+    task.executableURL = URL(fileURLWithPath: currentExecutablePath())
+    task.arguments = ["overlay"]
+    task.standardOutput = FileHandle.nullDevice
+    task.standardError = FileHandle.nullDevice
+    task.standardInput = FileHandle.nullDevice
+    try? task.run()
+    try? "\(task.processIdentifier)".write(toFile: overlayPidFilePath, atomically: true, encoding: .utf8)
+}
+
+func stopOverlay() {
+    guard let content = try? String(contentsOfFile: overlayPidFilePath, encoding: .utf8),
+          let pid = Int32(content.trimmingCharacters(in: .whitespacesAndNewlines))
+    else { return }
+    kill(pid, SIGTERM)
+    try? FileManager.default.removeItem(atPath: overlayPidFilePath)
+}
