@@ -2,8 +2,10 @@ import Cocoa
 
 private let stateNotificationName = Notification.Name("com.arturious.agent-signal.state")
 
-/// Anthropic/Claude's brand orange (terracotta), #DA7756.
-private let claudeOrange = NSColor(red: 0xDA / 255, green: 0x77 / 255, blue: 0x56 / 255, alpha: 1)
+/// Claude Code's own "claude" theme color, rgb(215,119,87) / #D77757 —
+/// confirmed in src/utils/theme.ts of the reconstructed source, the exact
+/// value the spinner text itself is rendered in.
+private let claudeOrange = NSColor(red: 215 / 255, green: 119 / 255, blue: 87 / 255, alpha: 1)
 
 /// Claude Code's own spinner: glyph set and animation logic straight from
 /// its (reconstructed-from-sourcemap) source — `SPINNER_FRAMES =
@@ -95,8 +97,6 @@ private final class OverlayController {
         pendingWork.forEach { $0.cancel() }
         pendingWork.removeAll()
 
-        let showText = loadConfig().overlayTextEnabled
-
         switch state {
         case .idle:
             view.alphaValue = 0
@@ -104,22 +104,12 @@ private final class OverlayController {
         case .working:
             view.alphaValue = 1
             var sequencePos = 0
-            var word = spinnerWords.randomElement() ?? "Working"
-            var tick = 0
-            func render() -> String {
-                let glyph = spinnerGlyphs[spinnerSequence[sequencePos]]
-                return showText ? "\(glyph) \(word)…" : glyph
-            }
-            view.setText(render())
+            view.setText(spinnerGlyphs[spinnerSequence[sequencePos]])
 
             func scheduleNextFrame() {
                 let step = DispatchWorkItem { [weak self] in
                     sequencePos = (sequencePos + 1) % spinnerSequence.count
-                    tick += 1
-                    if tick % 15 == 0 { // change word every ~1.8s
-                        word = spinnerWords.randomElement() ?? word
-                    }
-                    self?.view.setText(render())
+                    self?.view.setText(spinnerGlyphs[spinnerSequence[sequencePos]])
                     scheduleNextFrame()
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + spinnerInterval, execute: step)
@@ -138,11 +128,15 @@ private final class OverlayController {
             pendingWork.append(timeout)
 
         case .done:
-            view.setText(showText ? "✓ Done" : "✓")
-            schedule([(0.12, true), (0.12, false), (0.12, true), (0.12, false), (0.5, true)])
+            view.setText("✓")
+            schedule([
+                (0.12, true), (0.12, false), (0.12, true), (0.12, false), (0.12, true),
+                (0.12, false), (0.12, true), (0.12, false), (0.12, true), (0.12, false),
+                (0.5, true),
+            ])
 
         case .attention:
-            view.setText(showText ? "✳ Needs attention" : "✳")
+            view.setText("✳")
             schedule([
                 (0.08, true), (0.08, false), (0.08, true), (0.08, false), (0.08, true),
                 (0.08, false), (0.08, true), (0.08, false), (0.08, true), (0.08, false),

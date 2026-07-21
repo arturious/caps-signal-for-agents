@@ -3,7 +3,6 @@ import Foundation
 struct CapsigConfig: Codable {
     var ledEnabled: Bool = true
     var overlayEnabled: Bool = true
-    var overlayTextEnabled: Bool = true
 }
 
 private var configPath: String {
@@ -36,11 +35,10 @@ func handleConfigCommand(_ args: [String]) {
     guard args.count == 2, let onOff = OnOff(rawValue: args[1]) else {
         print("""
         Текущие настройки (\(configPath)):
-          led:          \(config.ledEnabled ? "on" : "off")
-          overlay:      \(config.overlayEnabled ? "on" : "off")
-          overlay-text: \(config.overlayTextEnabled ? "on" : "off")
+          led:     \(config.ledEnabled ? "on" : "off")
+          overlay: \(config.overlayEnabled ? "on" : "off")
 
-        Usage: agent-signal config <led|overlay|overlay-text> <on|off>
+        Usage: agent-signal config <led|overlay> <on|off>
         """)
         return
     }
@@ -56,10 +54,8 @@ func handleConfigCommand(_ args: [String]) {
         if !config.overlayEnabled {
             stopOverlay()
         }
-    case "overlay-text":
-        config.overlayTextEnabled = onOff.boolValue
     default:
-        print("Неизвестная настройка: \(args[0]). Используйте 'led', 'overlay' или 'overlay-text'.")
+        print("Неизвестная настройка: \(args[0]). Используйте 'led' или 'overlay'.")
         return
     }
 
