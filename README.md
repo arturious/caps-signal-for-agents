@@ -2,7 +2,7 @@
 
 Status indicator for Claude Code — shows what the agent is doing right now, via the Caps Lock LED and/or a small floating spinner near the notch, visible even over fullscreen apps.
 
-## Install
+### Install
 
 Install via script:
 ```sh
@@ -13,7 +13,7 @@ This downloads and installs `agent-signal.pkg`, which puts the binary at `/usr/l
 
 The installer is unsigned — if Gatekeeper blocks it, right-click the downloaded `.pkg` → Open, or run the `curl`/`installer` steps manually.
 
-# Configure
+### Configure
 
 ```sh
 agent-signal config              # show current settings
