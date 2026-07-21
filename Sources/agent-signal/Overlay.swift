@@ -5,6 +5,11 @@ private let stateNotificationName = Notification.Name("com.arturious.agent-signa
 /// Anthropic/Claude's brand orange (terracotta), #DA7756.
 private let claudeOrange = NSColor(red: 0xDA / 255, green: 0x77 / 255, blue: 0x56 / 255, alpha: 1)
 
+/// Cosmetic stand-in for Claude Code's own spinner glyph animation — not a
+/// byte-for-byte replica (that logic isn't exposed anywhere), just a
+/// similarly styled rotating asterisk in the same color.
+private let spinnerGlyphs = ["✶", "✳", "✻", "✽"]
+
 enum OverlayState: String {
     case idle, working, done, attention
 }
@@ -18,18 +23,27 @@ func postOverlayState(_ state: OverlayState) {
     )
 }
 
-/// A small borderless dot pinned to the top-right corner, kept visible even
-/// over fullscreen apps via `.fullScreenAuxiliary` (the same mechanism
+/// A small borderless label pinned to the top-right corner, kept visible
+/// even over fullscreen apps via `.fullScreenAuxiliary` (the same mechanism
 /// Spotlight/Notification Center use).
-private final class Dot: NSWindow {
-    private let diameter: CGFloat = 7
-    private let circle = NSView()
+private final class SpinnerLabel: NSWindow {
+    private let label = NSTextField(labelWithString: "")
 
     init() {
-        let screen = NSScreen.main?.frame ?? .zero
-        let origin = NSPoint(x: screen.maxX - diameter - 10, y: screen.maxY - diameter - 6)
+        let size = NSSize(width: 260, height: 20)
+        let mainScreen = NSScreen.main
+        let screen = mainScreen?.frame ?? .zero
+        // Sit just to the right of the camera notch on notched MacBooks;
+        // falls back to the far-right corner on screens without one.
+        let x: CGFloat
+        if let notchRightEdge = mainScreen?.auxiliaryTopRightArea?.minX {
+            x = notchRightEdge + 8
+        } else {
+            x = screen.maxX - size.width - 10
+        }
+        let origin = NSPoint(x: x, y: screen.maxY - size.height - 4)
         super.init(
-            contentRect: NSRect(origin: origin, size: NSSize(width: diameter, height: diameter)),
+            contentRect: NSRect(origin: origin, size: size),
             styleMask: [.borderless],
             backing: .buffered,
             defer: false
@@ -41,22 +55,27 @@ private final class Dot: NSWindow {
         level = .statusBar
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
 
-        circle.wantsLayer = true
-        circle.layer?.cornerRadius = diameter / 2
-        circle.layer?.backgroundColor = claudeOrange.cgColor
-        circle.frame = NSRect(origin: .zero, size: NSSize(width: diameter, height: diameter))
+        label.font = .monospacedSystemFont(ofSize: 13, weight: .medium)
+        label.textColor = claudeOrange
+        label.alignment = .left
+        label.frame = NSRect(origin: .zero, size: size)
+        label.autoresizingMask = [.width, .height]
 
-        let content = NSView(frame: NSRect(origin: .zero, size: NSSize(width: diameter, height: diameter)))
-        content.addSubview(circle)
+        let content = NSView(frame: NSRect(origin: .zero, size: size))
+        content.addSubview(label)
         contentView = content
 
         alphaValue = 0
         orderFrontRegardless()
     }
+
+    func setText(_ text: String) {
+        label.stringValue = text
+    }
 }
 
 private final class OverlayController {
-    private let dot = Dot()
+    private let view = SpinnerLabel()
     private var timer: Timer?
     private var pendingWork: [DispatchWorkItem] = []
 
@@ -68,29 +87,38 @@ private final class OverlayController {
 
         switch state {
         case .idle:
-            dot.alphaValue = 0
+            view.alphaValue = 0
 
         case .working:
-            dot.alphaValue = 1
-            var visible = true
-            timer = Timer.scheduledTimer(withTimeInterval: 0.375, repeats: true) { [weak self] _ in
-                visible.toggle()
-                self?.dot.alphaValue = visible ? 1 : 0
+            view.alphaValue = 1
+            var glyphIndex = 0
+            var word = spinnerWords.randomElement() ?? "Working"
+            var tick = 0
+            view.setText("\(spinnerGlyphs[glyphIndex]) \(word)…")
+            timer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: true) { [weak self] _ in
+                glyphIndex = (glyphIndex + 1) % spinnerGlyphs.count
+                tick += 1
+                if tick % 15 == 0 { // change word every ~1.8s
+                    word = spinnerWords.randomElement() ?? word
+                }
+                self?.view.setText("\(spinnerGlyphs[glyphIndex]) \(word)…")
             }
             // Safety net: if no further state update ever arrives (e.g. the
-            // "Stop" hook doesn't fire), don't pulse forever.
+            // "Stop" hook doesn't fire), don't spin forever.
             let timeout = DispatchWorkItem { [weak self] in
                 self?.timer?.invalidate()
                 self?.timer = nil
-                self?.dot.alphaValue = 0
+                self?.view.alphaValue = 0
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 300, execute: timeout)
             pendingWork.append(timeout)
 
         case .done:
+            view.setText("✓ Done")
             schedule([(0.12, true), (0.12, false), (0.12, true), (0.12, false), (0.5, true)])
 
         case .attention:
+            view.setText("✳ Needs attention")
             schedule([
                 (0.08, true), (0.08, false), (0.08, true), (0.08, false), (0.08, true),
                 (0.08, false), (0.08, true), (0.08, false), (0.08, true), (0.08, false),
@@ -98,16 +126,16 @@ private final class OverlayController {
         }
     }
 
-    /// Runs a sequence of (duration, visible) steps, then hides the dot.
+    /// Runs a sequence of (duration, visible) steps, then hides the label.
     private func schedule(_ pattern: [(TimeInterval, Bool)]) {
         var delay: TimeInterval = 0
         for (duration, visible) in pattern {
-            let step = DispatchWorkItem { [weak self] in self?.dot.alphaValue = visible ? 1 : 0 }
+            let step = DispatchWorkItem { [weak self] in self?.view.alphaValue = visible ? 1 : 0 }
             DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: step)
             pendingWork.append(step)
             delay += duration
         }
-        let hide = DispatchWorkItem { [weak self] in self?.dot.alphaValue = 0 }
+        let hide = DispatchWorkItem { [weak self] in self?.view.alphaValue = 0 }
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: hide)
         pendingWork.append(hide)
     }
