@@ -85,6 +85,8 @@ private final class OverlayController {
         pendingWork.forEach { $0.cancel() }
         pendingWork.removeAll()
 
+        let showText = loadConfig().overlayTextEnabled
+
         switch state {
         case .idle:
             view.alphaValue = 0
@@ -94,14 +96,17 @@ private final class OverlayController {
             var glyphIndex = 0
             var word = spinnerWords.randomElement() ?? "Working"
             var tick = 0
-            view.setText("\(spinnerGlyphs[glyphIndex]) \(word)…")
+            func render() -> String {
+                showText ? "\(spinnerGlyphs[glyphIndex]) \(word)…" : spinnerGlyphs[glyphIndex]
+            }
+            view.setText(render())
             timer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: true) { [weak self] _ in
                 glyphIndex = (glyphIndex + 1) % spinnerGlyphs.count
                 tick += 1
                 if tick % 15 == 0 { // change word every ~1.8s
                     word = spinnerWords.randomElement() ?? word
                 }
-                self?.view.setText("\(spinnerGlyphs[glyphIndex]) \(word)…")
+                self?.view.setText(render())
             }
             // Safety net: if no further state update ever arrives (e.g. the
             // "Stop" hook doesn't fire), don't spin forever.
@@ -114,11 +119,11 @@ private final class OverlayController {
             pendingWork.append(timeout)
 
         case .done:
-            view.setText("✓ Done")
+            view.setText(showText ? "✓ Done" : "✓")
             schedule([(0.12, true), (0.12, false), (0.12, true), (0.12, false), (0.5, true)])
 
         case .attention:
-            view.setText("✳ Needs attention")
+            view.setText(showText ? "✳ Needs attention" : "✳")
             schedule([
                 (0.08, true), (0.08, false), (0.08, true), (0.08, false), (0.08, true),
                 (0.08, false), (0.08, true), (0.08, false), (0.08, true), (0.08, false),
