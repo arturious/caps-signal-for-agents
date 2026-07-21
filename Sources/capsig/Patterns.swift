@@ -1,11 +1,5 @@
 import Darwin
-import CoreGraphics
-
-/// Seconds since the last keyboard/mouse activity, system-wide.
-/// Reads the HID idle timer — no Accessibility permission required.
-func secondsSinceLastInput() -> Double {
-    CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .null)
-}
+import IOKit
 
 /// "Claude сейчас работает": slow, steady blink, full cycle every 0.75s.
 /// Runs forever until killed (SIGTERM from stopRunningLoop).
@@ -35,29 +29,16 @@ func runDonePattern() {
     setCapsLock(connect, false)
 }
 
-/// "Claude требует внимания": bursts of 5 fast blinks, repeating until the
-/// user touches the keyboard or mouse (acknowledging the alert).
-func runAttentionLoop() -> Never {
+/// "Claude требует внимания": 5 fast blinks, then off.
+/// One-shot — runs to completion in the foreground, like runDonePattern.
+func runAttentionPattern() {
     guard let connect = openHIDConnection() else { exit(1) }
-    installShutdownHandler(connect)
-    while true {
-        let idleBefore = secondsSinceLastInput()
-        for _ in 0..<5 {
-            setCapsLock(connect, true)
-            usleep(80_000)
-            setCapsLock(connect, false)
-            usleep(80_000)
-        }
-        usleep(700_000)
-        // If idle time didn't grow with the cycle, real input reset it —
-        // the user has acknowledged the alert.
-        if secondsSinceLastInput() < idleBefore {
-            break
-        }
+    for _ in 0..<5 {
+        setCapsLock(connect, true)
+        usleep(80_000)
+        setCapsLock(connect, false)
+        usleep(80_000)
     }
-    setCapsLock(connect, false)
-    clearPidFile()
-    exit(0)
 }
 
 /// Ensures a killed loop leaves the LED off instead of stuck mid-blink.

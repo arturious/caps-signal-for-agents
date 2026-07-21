@@ -6,8 +6,7 @@ func printUsage() {
 
       working     Claude сейчас работает — медленное мигание (0.75s)
       done        Claude закончил задачу — 2 коротких + 1 длинное мигание
-      attention   Claude требует внимания — 5 быстрых миганий, повторяется
-                  до нажатия любой клавиши/движения мыши
+      attention   Claude требует внимания — 5 быстрых миганий
       stop        Погасить индикатор и остановить текущий цикл
       install-hooks    Прописать вызовы capsig в ~/.claude/settings.json
       uninstall-hooks  Убрать записи capsig из ~/.claude/settings.json
@@ -30,7 +29,7 @@ case "done":
 
 case "attention":
     stopRunningLoop()
-    spawnDetachedLoop("_loop-attention")
+    runAttentionPattern()
 
 case "status":
     if let connect = openHIDConnection() {
@@ -55,9 +54,6 @@ case "uninstall-hooks":
 // Internal: only ever invoked by spawnDetachedLoop, as a detached child.
 case "_loop-working":
     runWorkingLoop()
-
-case "_loop-attention":
-    runAttentionLoop()
 
 default:
     printUsage()
