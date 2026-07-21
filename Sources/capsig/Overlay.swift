@@ -2,6 +2,9 @@ import Cocoa
 
 private let stateNotificationName = Notification.Name("com.arturious.capsig.state")
 
+/// Anthropic/Claude's brand orange (terracotta), #DA7756.
+private let claudeOrange = NSColor(red: 0xDA / 255, green: 0x77 / 255, blue: 0x56 / 255, alpha: 1)
+
 enum OverlayState: String {
     case idle, working, done, attention
 }
@@ -19,7 +22,7 @@ func postOverlayState(_ state: OverlayState) {
 /// over fullscreen apps via `.fullScreenAuxiliary` (the same mechanism
 /// Spotlight/Notification Center use).
 private final class Dot: NSWindow {
-    private let diameter: CGFloat = 14
+    private let diameter: CGFloat = 7
     private let circle = NSView()
 
     init() {
@@ -40,6 +43,7 @@ private final class Dot: NSWindow {
 
         circle.wantsLayer = true
         circle.layer?.cornerRadius = diameter / 2
+        circle.layer?.backgroundColor = claudeOrange.cgColor
         circle.frame = NSRect(origin: .zero, size: NSSize(width: diameter, height: diameter))
 
         let content = NSView(frame: NSRect(origin: .zero, size: NSSize(width: diameter, height: diameter)))
@@ -48,10 +52,6 @@ private final class Dot: NSWindow {
 
         alphaValue = 0
         orderFrontRegardless()
-    }
-
-    func setColor(_ color: NSColor) {
-        circle.layer?.backgroundColor = color.cgColor
     }
 }
 
@@ -71,7 +71,6 @@ private final class OverlayController {
             dot.alphaValue = 0
 
         case .working:
-            dot.setColor(.systemYellow)
             dot.alphaValue = 1
             var visible = true
             timer = Timer.scheduledTimer(withTimeInterval: 0.375, repeats: true) { [weak self] _ in
@@ -80,11 +79,9 @@ private final class OverlayController {
             }
 
         case .done:
-            dot.setColor(.systemGreen)
             schedule([(0.12, true), (0.12, false), (0.12, true), (0.12, false), (0.5, true)])
 
         case .attention:
-            dot.setColor(.systemRed)
             schedule([
                 (0.08, true), (0.08, false), (0.08, true), (0.08, false), (0.08, true),
                 (0.08, false), (0.08, true), (0.08, false), (0.08, true), (0.08, false),
