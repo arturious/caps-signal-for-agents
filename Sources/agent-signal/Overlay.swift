@@ -5,10 +5,21 @@ private let stateNotificationName = Notification.Name("com.arturious.agent-signa
 /// Anthropic/Claude's brand orange (terracotta), #DA7756.
 private let claudeOrange = NSColor(red: 0xDA / 255, green: 0x77 / 255, blue: 0x56 / 255, alpha: 1)
 
-/// Cosmetic stand-in for Claude Code's own spinner glyph animation — not a
-/// byte-for-byte replica (that logic isn't exposed anywhere), just a
-/// similarly styled rotating asterisk in the same color.
-private let spinnerGlyphs = ["✶", "✳", "✻", "✽"]
+/// Claude Code's own spinner glyph sequence (·, four/six/eight-spoked
+/// asterisks), per reverse-engineering by Kyle Martinez and Alex Beals
+/// (blog.alexbeals.com/posts/claude-codes-thinking-animation). The real
+/// timing/easing isn't published — this approximates it (first and last
+/// frame held slightly longer).
+private let spinnerGlyphs = ["·", "✢", "✳", "✶", "✻", "✽"]
+private let spinnerBaseInterval: TimeInterval = 0.11
+
+/// Ping-pongs forward through the glyphs then back, instead of wrapping
+/// straight from the last glyph to the first: · ✢ ✳ ✶ ✻ ✽ ✻ ✶ ✳ ✢ (repeat).
+private let spinnerSequence: [Int] = [0, 1, 2, 3, 4, 5, 4, 3, 2, 1]
+
+private func spinnerFrameDuration(_ glyphIndex: Int) -> TimeInterval {
+    (glyphIndex == 0 || glyphIndex == spinnerGlyphs.count - 1) ? spinnerBaseInterval * 4 : spinnerBaseInterval
+}
 
 enum OverlayState: String {
     case idle, working, done, attention
@@ -33,15 +44,22 @@ private final class SpinnerLabel: NSWindow {
         let size = NSSize(width: 260, height: 20)
         let mainScreen = NSScreen.main
         let screen = mainScreen?.frame ?? .zero
-        // Sit just to the right of the camera notch on notched MacBooks;
-        // falls back to the far-right corner on screens without one.
+        // Sit just to the right of the camera notch on notched MacBooks —
+        // auxiliaryTopRightArea also gives the exact row other menu bar
+        // items sit in (NSStatusBar.system.thickness is a stale fixed 22pt
+        // that doesn't match a scaled-Retina notched display's real ~33pt
+        // menu bar), so use it for vertical centering too. Falls back to a
+        // guessed offset from the screen edge on screens without a notch.
         let x: CGFloat
-        if let notchRightEdge = mainScreen?.auxiliaryTopRightArea?.minX {
-            x = notchRightEdge + 8
+        let y: CGFloat
+        if let notchArea = mainScreen?.auxiliaryTopRightArea {
+            x = notchArea.minX + 8
+            y = notchArea.minY + (notchArea.height - size.height) / 2
         } else {
             x = screen.maxX - size.width - 10
+            y = screen.maxY - size.height - 4
         }
-        let origin = NSPoint(x: x, y: screen.maxY - size.height - 4)
+        let origin = NSPoint(x: x, y: y)
         super.init(
             contentRect: NSRect(origin: origin, size: size),
             styleMask: [.borderless],
@@ -55,7 +73,7 @@ private final class SpinnerLabel: NSWindow {
         level = .statusBar
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
 
-        label.font = .monospacedSystemFont(ofSize: 13, weight: .medium)
+        label.font = .monospacedSystemFont(ofSize: 14, weight: .medium)
         label.textColor = claudeOrange
         label.alignment = .left
         label.frame = NSRect(origin: .zero, size: size)
@@ -76,12 +94,9 @@ private final class SpinnerLabel: NSWindow {
 
 private final class OverlayController {
     private let view = SpinnerLabel()
-    private var timer: Timer?
     private var pendingWork: [DispatchWorkItem] = []
 
     func apply(_ state: OverlayState) {
-        timer?.invalidate()
-        timer = nil
         pendingWork.forEach { $0.cancel() }
         pendingWork.removeAll()
 
@@ -93,26 +108,35 @@ private final class OverlayController {
 
         case .working:
             view.alphaValue = 1
-            var glyphIndex = 0
+            var sequencePos = 0
             var word = spinnerWords.randomElement() ?? "Working"
             var tick = 0
             func render() -> String {
-                showText ? "\(spinnerGlyphs[glyphIndex]) \(word)…" : spinnerGlyphs[glyphIndex]
+                let glyph = spinnerGlyphs[spinnerSequence[sequencePos]]
+                return showText ? "\(glyph) \(word)…" : glyph
             }
             view.setText(render())
-            timer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: true) { [weak self] _ in
-                glyphIndex = (glyphIndex + 1) % spinnerGlyphs.count
-                tick += 1
-                if tick % 15 == 0 { // change word every ~1.8s
-                    word = spinnerWords.randomElement() ?? word
+
+            func scheduleNextFrame() {
+                let step = DispatchWorkItem { [weak self] in
+                    sequencePos = (sequencePos + 1) % spinnerSequence.count
+                    tick += 1
+                    if tick % 22 == 0 { // change word every ~1.8s
+                        word = spinnerWords.randomElement() ?? word
+                    }
+                    self?.view.setText(render())
+                    scheduleNextFrame()
                 }
-                self?.view.setText(render())
+                DispatchQueue.main.asyncAfter(deadline: .now() + spinnerFrameDuration(spinnerSequence[sequencePos]), execute: step)
+                self.pendingWork.append(step)
             }
+            scheduleNextFrame()
+
             // Safety net: if no further state update ever arrives (e.g. the
             // "Stop" hook doesn't fire), don't spin forever.
             let timeout = DispatchWorkItem { [weak self] in
-                self?.timer?.invalidate()
-                self?.timer = nil
+                self?.pendingWork.forEach { $0.cancel() }
+                self?.pendingWork.removeAll()
                 self?.view.alphaValue = 0
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 300, execute: timeout)
