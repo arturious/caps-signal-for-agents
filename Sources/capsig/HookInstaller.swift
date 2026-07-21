@@ -56,15 +56,29 @@ func uninstallHooks() {
     print("capsig hooks removed from \(settingsPath)")
 }
 
-/// Strips any hook entries whose command references this binary, so
-/// re-running install-hooks (e.g. after moving the binary) doesn't
-/// accumulate duplicate entries.
+/// Strips any hook entries invoking a binary named "capsig", so re-running
+/// install-hooks — even from a different path than a previous install (e.g.
+/// a dev build vs. the one under /usr/local/bin) — replaces rather than
+/// duplicates entries.
 private func removeOwnEntries(from entries: inout [[String: Any]]) {
-    let ownPath = currentExecutablePath()
+    let ownName = (currentExecutablePath() as NSString).lastPathComponent
     entries.removeAll { entry in
         guard let inner = entry["hooks"] as? [[String: Any]] else { return false }
-        return inner.contains { ($0["command"] as? String)?.contains(ownPath) == true }
+        return inner.contains { hook in
+            guard let command = hook["command"] as? String,
+                  let path = quotedPath(in: command)
+            else { return false }
+            return (path as NSString).lastPathComponent == ownName
+        }
     }
+}
+
+/// Extracts the path from a command string of the form `"<path>" <args>`.
+private func quotedPath(in command: String) -> String? {
+    guard command.hasPrefix("\""),
+          let closingQuote = command.dropFirst().firstIndex(of: "\"")
+    else { return nil }
+    return String(command[command.index(after: command.startIndex)..<closingQuote])
 }
 
 private func loadSettings() -> [String: Any] {

@@ -1,0 +1,16 @@
+#!/bin/bash
+set -euo pipefail
+
+# postinstall runs as root, so $HOME here would be /var/root — capsig needs
+# to write to the actual logged-in user's ~/.claude/settings.json instead.
+CONSOLE_USER=$(stat -f%Su /dev/console)
+
+if [ -z "$CONSOLE_USER" ] || [ "$CONSOLE_USER" = "root" ]; then
+    echo "capsig: could not determine the logged-in user; skipping hook install."
+    echo "capsig: run '/usr/local/bin/capsig install-hooks' manually."
+    exit 0
+fi
+
+sudo -u "$CONSOLE_USER" /usr/local/bin/capsig install-hooks
+
+exit 0
