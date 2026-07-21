@@ -5,21 +5,16 @@ private let stateNotificationName = Notification.Name("com.arturious.agent-signa
 /// Anthropic/Claude's brand orange (terracotta), #DA7756.
 private let claudeOrange = NSColor(red: 0xDA / 255, green: 0x77 / 255, blue: 0x56 / 255, alpha: 1)
 
-/// Claude Code's own spinner glyph sequence (·, four/six/eight-spoked
-/// asterisks), per reverse-engineering by Kyle Martinez and Alex Beals
-/// (blog.alexbeals.com/posts/claude-codes-thinking-animation). The real
-/// timing/easing isn't published — this approximates it (first and last
-/// frame held slightly longer).
+/// Claude Code's own spinner: glyph set and animation logic straight from
+/// its (reconstructed-from-sourcemap) source — `SPINNER_FRAMES =
+/// [...DEFAULT_CHARACTERS, ...DEFAULT_CHARACTERS.reversed()]`, ticking at a
+/// flat `Math.floor(time / 120) % SPINNER_FRAMES.length`. The endpoints (·
+/// and ✽) land twice in a row (end of the forward pass, start of the
+/// reverse), which is what reads as them "holding longer" — 240ms, not a
+/// special-cased easing.
 private let spinnerGlyphs = ["·", "✢", "✳", "✶", "✻", "✽"]
-private let spinnerBaseInterval: TimeInterval = 0.11
-
-/// Ping-pongs forward through the glyphs then back, instead of wrapping
-/// straight from the last glyph to the first: · ✢ ✳ ✶ ✻ ✽ ✻ ✶ ✳ ✢ (repeat).
-private let spinnerSequence: [Int] = [0, 1, 2, 3, 4, 5, 4, 3, 2, 1]
-
-private func spinnerFrameDuration(_ glyphIndex: Int) -> TimeInterval {
-    (glyphIndex == 0 || glyphIndex == spinnerGlyphs.count - 1) ? spinnerBaseInterval * 4 : spinnerBaseInterval
-}
+private let spinnerSequence: [Int] = [0, 1, 2, 3, 4, 5, 5, 4, 3, 2, 1, 0]
+private let spinnerInterval: TimeInterval = 0.12
 
 enum OverlayState: String {
     case idle, working, done, attention
@@ -121,13 +116,13 @@ private final class OverlayController {
                 let step = DispatchWorkItem { [weak self] in
                     sequencePos = (sequencePos + 1) % spinnerSequence.count
                     tick += 1
-                    if tick % 22 == 0 { // change word every ~1.8s
+                    if tick % 15 == 0 { // change word every ~1.8s
                         word = spinnerWords.randomElement() ?? word
                     }
                     self?.view.setText(render())
                     scheduleNextFrame()
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + spinnerFrameDuration(spinnerSequence[sequencePos]), execute: step)
+                DispatchQueue.main.asyncAfter(deadline: .now() + spinnerInterval, execute: step)
                 self.pendingWork.append(step)
             }
             scheduleNextFrame()
