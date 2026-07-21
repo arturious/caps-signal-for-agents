@@ -1,6 +1,6 @@
 import Cocoa
 
-private let stateNotificationName = Notification.Name("com.arturious.capsig.state")
+private let stateNotificationName = Notification.Name("com.arturious.agent-signal.state")
 
 /// Anthropic/Claude's brand orange (terracotta), #DA7756.
 private let claudeOrange = NSColor(red: 0xDA / 255, green: 0x77 / 255, blue: 0x56 / 255, alpha: 1)
@@ -9,7 +9,7 @@ enum OverlayState: String {
     case idle, working, done, attention
 }
 
-/// Broadcasts a state change to any running `capsig overlay` process.
+/// Broadcasts a state change to any running `agent-signal overlay` process.
 /// Cross-process, no shared file/socket needed.
 func postOverlayState(_ state: OverlayState) {
     DistributedNotificationCenter.default().postNotificationName(
@@ -77,6 +77,15 @@ private final class OverlayController {
                 visible.toggle()
                 self?.dot.alphaValue = visible ? 1 : 0
             }
+            // Safety net: if no further state update ever arrives (e.g. the
+            // "Stop" hook doesn't fire), don't pulse forever.
+            let timeout = DispatchWorkItem { [weak self] in
+                self?.timer?.invalidate()
+                self?.timer = nil
+                self?.dot.alphaValue = 0
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 300, execute: timeout)
+            pendingWork.append(timeout)
 
         case .done:
             schedule([(0.12, true), (0.12, false), (0.12, true), (0.12, false), (0.5, true)])
@@ -105,7 +114,7 @@ private final class OverlayController {
 }
 
 /// Runs the persistent overlay process. Blocks forever (AppKit run loop);
-/// only killed via `capsig overlay-stop` or logout.
+/// only killed via `agent-signal overlay-stop` or logout.
 func runOverlayApp() {
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory) // no Dock icon, no menu bar item

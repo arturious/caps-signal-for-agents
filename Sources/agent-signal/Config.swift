@@ -6,7 +6,7 @@ struct CapsigConfig: Codable {
 }
 
 private var configPath: String {
-    NSHomeDirectory() + "/.config/capsig/config.json"
+    NSHomeDirectory() + "/.config/agent-signal/config.json"
 }
 
 func loadConfig() -> CapsigConfig {
@@ -28,7 +28,7 @@ private enum OnOff: String {
     var boolValue: Bool { self == .on }
 }
 
-/// `capsig config` (show current settings) or `capsig config <led|overlay> <on|off>`.
+/// `agent-signal config` (show current settings) or `agent-signal config <led|overlay> <on|off>`.
 func handleConfigCommand(_ args: [String]) {
     var config = loadConfig()
 
@@ -38,7 +38,7 @@ func handleConfigCommand(_ args: [String]) {
           led:     \(config.ledEnabled ? "on" : "off")
           overlay: \(config.overlayEnabled ? "on" : "off")
 
-        Usage: capsig config <led|overlay> <on|off>
+        Usage: agent-signal config <led|overlay> <on|off>
         """)
         return
     }

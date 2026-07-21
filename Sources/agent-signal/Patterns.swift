@@ -2,16 +2,25 @@ import Darwin
 import IOKit
 
 /// "Claude сейчас работает": slow, steady blink, full cycle every 0.75s.
-/// Runs forever until killed (SIGTERM from stopRunningLoop).
+/// Normally killed by the next hook event (SIGTERM from stopRunningLoop),
+/// but self-terminates after maxCycles as a safety net in case the "Stop"
+/// hook never fires — otherwise the LED (and real Caps Lock state) would
+/// stay stuck on indefinitely.
 func runWorkingLoop() -> Never {
     guard let connect = openHIDConnection() else { exit(1) }
     installShutdownHandler(connect)
-    while true {
+    let maxCycles = 400 // ~5 minutes at 0.75s/cycle
+    var cycles = 0
+    while cycles < maxCycles {
         setCapsLock(connect, true)
         usleep(375_000)
         setCapsLock(connect, false)
         usleep(375_000)
+        cycles += 1
     }
+    setCapsLock(connect, false)
+    clearPidFile()
+    exit(0)
 }
 
 /// "Claude закончил задачу": two short blinks + one long blink, then off.

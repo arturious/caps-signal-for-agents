@@ -2,7 +2,7 @@ import Foundation
 
 func printUsage() {
     print("""
-    Usage: capsig <command>
+    Usage: agent-signal <command>
 
       working     Claude сейчас работает — медленное мигание (0.75s)
       done        Claude закончил задачу — 2 коротких + 1 длинное мигание
@@ -12,8 +12,8 @@ func printUsage() {
       overlay-stop  Остановить floating-индикатор
       config          Показать настройки (led/overlay on|off)
       config <led|overlay> <on|off>   Включить/выключить один из каналов
-      install-hooks    Прописать вызовы capsig в ~/.claude/settings.json
-      uninstall-hooks  Убрать записи capsig из ~/.claude/settings.json
+      install-hooks    Прописать вызовы agent-signal в ~/.claude/settings.json
+      uninstall-hooks  Убрать записи agent-signal из ~/.claude/settings.json
     """)
 }
 

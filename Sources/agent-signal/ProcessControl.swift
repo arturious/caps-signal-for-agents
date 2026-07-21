@@ -1,10 +1,10 @@
 import Foundation
 import Darwin
 
-/// One capsig loop (working/attention) runs at a time; its pid lives here so
+/// One agent-signal loop (working/attention) runs at a time; its pid lives here so
 /// a new command can stop the old loop before starting its own pattern.
 private var pidFilePath: String {
-    NSTemporaryDirectory() + "capsig-\(NSUserName()).pid"
+    NSTemporaryDirectory() + "agent-signal-\(NSUserName()).pid"
 }
 
 func currentExecutablePath() -> String {
@@ -54,7 +54,7 @@ func clearPidFile() {
 // working-loop daemon above which restarts on every hook event.
 
 private var overlayPidFilePath: String {
-    NSTemporaryDirectory() + "capsig-overlay-\(NSUserName()).pid"
+    NSTemporaryDirectory() + "agent-signal-overlay-\(NSUserName()).pid"
 }
 
 /// Starts the overlay process if it isn't already running. Safe to call

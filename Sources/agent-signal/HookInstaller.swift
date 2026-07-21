@@ -30,7 +30,7 @@ func installHooks() {
 
     print("Hooks installed into \(settingsPath):")
     for (event, subcommand) in managedEvents {
-        print("  \(event) -> capsig \(subcommand)")
+        print("  \(event) -> agent-signal \(subcommand)")
     }
 }
 
@@ -53,10 +53,10 @@ func uninstallHooks() {
 
     root["hooks"] = hooks
     saveSettings(root)
-    print("capsig hooks removed from \(settingsPath)")
+    print("agent-signal hooks removed from \(settingsPath)")
 }
 
-/// Strips any hook entries invoking a binary named "capsig", so re-running
+/// Strips any hook entries invoking a binary named "agent-signal", so re-running
 /// install-hooks — even from a different path than a previous install (e.g.
 /// a dev build vs. the one under /usr/local/bin) — replaces rather than
 /// duplicates entries.

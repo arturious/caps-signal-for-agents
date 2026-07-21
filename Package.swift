@@ -2,12 +2,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "capsig",
+    name: "agent-signal",
     platforms: [.macOS(.v12)],
     targets: [
         .systemLibrary(name: "CIOHID"),
         .executableTarget(
-            name: "capsig",
+            name: "agent-signal",
             dependencies: ["CIOHID"]
         ),
     ]
