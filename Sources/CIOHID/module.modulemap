@@ -1,0 +1,5 @@
+module CIOHID [system] {
+    header "shim.h"
+    link "IOKit"
+    export *
+}
